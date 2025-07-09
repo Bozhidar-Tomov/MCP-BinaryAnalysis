@@ -1,0 +1,69 @@
+#!/bin/bash
+
+set -e
+
+WORKDIR="repos"
+OUTFILE="output.json"
+mkdir -p "$WORKDIR"
+> "$OUTFILE"
+
+REPOS=(
+  "https://github.com/kokke/tiny-AES-c.git"
+  "https://github.com/benhoyt/inih.git"
+  "https://github.com/IanHarvey/minicrypt.git"
+  "https://github.com/ultraembedded/fat_io_lib.git"
+  "https://github.com/picolibc/picolibc.git"
+  "https://github.com/brgl/uclibc-ng.git"
+  "https://github.com/wolfssl/wolfssl.git"
+  "https://github.com/Oryx-Embedded/CycloneCRYPTO.git"
+  "https://github.com/embeddedartistry/libc.git"
+  "https://github.com/singhofen/c-programming.git"
+  "https://github.com/BilalGns/C-Examples/tree/master/C-examples.git"
+  "https://github.com/DanielMartensson/C-Applications.git"
+)
+
+echo "[" > "$OUTFILE"
+first_entry=true
+
+for repo in "${REPOS[@]}"; do
+  reponame=$(basename "$repo" .git)
+  repopath="$WORKDIR/$reponame"
+  
+  echo ""
+
+  echo "Cloning $repo..."
+  git clone --depth=1 "$repo" "$repopath" &>/dev/null
+
+  echo "Searching for .c files in $reponame..."
+  mapfile -t cfiles < <(find "$repopath" -type f -name "*.c")
+
+  for cfile in "${cfiles[@]}"; do
+    relname=$(basename "$cfile" .c)
+    objfile="$WORKDIR/${relname}.o"
+
+    echo "Compiling $cfile..."
+    if ! gcc -c -I"$repopath" "$cfile" -o "$objfile" 2>/dev/null; then
+      echo "Compilation failed for $cfile, skipping..."
+      continue
+    fi
+
+    echo "Disassembling $objfile..."
+    assembly=$(objdump -d "$objfile")
+
+    orig_code=$(cat "$cfile")
+    code_json=$(jq -Rs <<< "$orig_code")
+    asm_json=$(jq -Rs <<< "$assembly")
+
+    if [ "$first_entry" = true ]; then
+      first_entry=false
+    else
+      echo "," >> "$OUTFILE"
+    fi
+
+    echo "  {\"code\": $code_json, \"assembly\": $asm_json}" >> "$OUTFILE"
+  done
+
+done
+
+echo "]" >> "$OUTFILE"
+echo "All done. Output written to $OUTFILE"

@@ -1,0 +1,24 @@
+#!/bin/bash
+
+INPUT="output.json"
+TMP="output_fixed.json"
+
+# Strip trailing comma before final ]
+# Add closing ] if it's missing
+echo "Fixing $INPUT..."
+
+# Remove any trailing commas at the end of the array
+sed ':a;N;$!ba;s/,\s*$/\n/' "$INPUT" > "$TMP"
+
+# Add ] if not already present
+if ! tail -c 1 "$TMP" | grep -q "]"; then
+  echo "]" >> "$TMP"
+fi
+
+# Validate
+if jq empty "$TMP" 2>/dev/null; then
+  mv "$TMP" "$INPUT"
+  echo "Fixed and valid JSON written to $INPUT"
+else
+  echo "Still invalid JSON. Check manually: $TMP"
+fi

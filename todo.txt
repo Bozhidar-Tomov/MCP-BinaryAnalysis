@@ -1,0 +1,21 @@
+learn AI to dissasemble code (or decomiling - convert machine code into high-level)
+mcp - model context protocol
+zod - schema validation
+deep research
+agentic workflow conversation only with model
+few shot
+multishot
+
+reverse engineering source code automation with AI
+collect programs with compiled code and object dump
+give examples ot AI to learn to make the same
+
+honeypot
+Kolmogorov complexity
+
+
+
+09.07.25
+readme
+compile
+compile+objdump
