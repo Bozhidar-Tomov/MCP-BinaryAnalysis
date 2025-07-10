@@ -1,6 +1,21 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-set -e
+#------------------------------------------------------------------------------
+# build_and_disassemble_repos.sh – clone/update a list of public C repositories,
+# compile every .c file found, disassemble the resulting object files and finally
+# store the original C source together with the disassembly in a single JSON
+# array.
+#
+# Requirements:
+#   • bash ≥ 4 (for mapfile)
+#   • git, gcc, objdump, jq, sed, find
+#
+# Output:
+#   The JSON array is written to ${OUTFILE:-output.json}. Each element has the
+#   form {"code": <stringified c file>, "assembly": <stringified objdump>}.
+#------------------------------------------------------------------------------
+
+set -euo pipefail
 
 WORKDIR="repos"
 OUTFILE="output.json"
@@ -18,7 +33,7 @@ REPOS=(
   "https://github.com/Oryx-Embedded/CycloneCRYPTO.git"
   "https://github.com/embeddedartistry/libc.git"
   "https://github.com/singhofen/c-programming.git"
-  "https://github.com/BilalGns/C-Examples/tree/master/C-examples.git"
+  "https://github.com/BilalGns/C-Examples.git"
   "https://github.com/DanielMartensson/C-Applications.git"
 )
 
@@ -32,7 +47,8 @@ for repo in "${REPOS[@]}"; do
   echo ""
 
   echo "Cloning $repo..."
-  git clone --depth=1 "$repo" "$repopath" &>/dev/null
+  rm -rf "$repopath" 2>/dev/null
+  git clone --depth=1 "$repo" "$repopath" &>/dev/null || { echo "Failed to clone $reponame, skipping"; continue; }
 
   echo "Searching for .c files in $reponame..."
   mapfile -t cfiles < <(find "$repopath" -type f -name "*.c")
@@ -42,13 +58,13 @@ for repo in "${REPOS[@]}"; do
     objfile="$WORKDIR/${relname}.o"
 
     echo "Compiling $cfile..."
-    if ! gcc -c -I"$repopath" "$cfile" -o "$objfile" 2>/dev/null; then
+    if ! gcc -g -c -I"$repopath" "$cfile" -o "$objfile" 2>/dev/null; then
       echo "Compilation failed for $cfile, skipping..."
       continue
     fi
 
     echo "Disassembling $objfile..."
-    assembly=$(objdump -d "$objfile")
+    assembly=$(objdump -d -M intel -S "$objfile")
 
     orig_code=$(cat "$cfile")
     code_json=$(jq -Rs <<< "$orig_code")
