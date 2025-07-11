@@ -206,5 +206,5 @@ for repo in "${REPOS[@]}"; do
 done
 
 echo "]" >> "$OUTFILE" || { log_error "Failed to finalize $OUTFILE"; exit 1; }
-log_info "All done. Output written to $OUTFILE"
-log_info "Successfully processed $processed_files files, $failed_files failed"
+echo "All done. Output written to $OUTFILE"
+echo "Successfully processed $processed_files files, $failed_files failed"

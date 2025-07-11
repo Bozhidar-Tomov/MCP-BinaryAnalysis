@@ -165,7 +165,7 @@ async def disassemble_c(input: str, is_source_code: bool = True, options: str = 
             temp_fd, temp_file = tempfile.mkstemp(suffix='.o')
             os.close(temp_fd)
             
-            compile_result = compile_c(code_src, output_file=temp_file, options="-O0 -std=c17", ctx=ctx)
+            compile_result = await compile_c(code_src, output_file=temp_file, options="-O0 -std=c17", ctx=ctx)
             if not compile_result.get("success"):
                 error_msg = compile_result.get("error", "Unknown compilation error")
                 if ctx: await ctx.error(f"GCC compilation error: {error_msg}")
