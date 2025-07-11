@@ -32,8 +32,8 @@ REPOS=(
   "https://github.com/benhoyt/inih.git"
   "https://github.com/IanHarvey/minicrypt.git"
   "https://github.com/ultraembedded/fat_io_lib.git"
-  "https://github.com/picolibc/picolibc.git"
-  "https://github.com/brgl/uclibc-ng.git"
+  # "https://github.com/picolibc/picolibc.git"
+  # "https://github.com/brgl/uclibc-ng.git"
   "https://github.com/wolfssl/wolfssl.git"
   "https://github.com/Oryx-Embedded/CycloneCRYPTO.git"
   "https://github.com/embeddedartistry/libc.git"
@@ -134,6 +134,14 @@ for repo in "${REPOS[@]}"; do
     continue
   fi
 
+  # Find all header directories for include paths
+  log_info "Finding header directories in $reponame..."
+  mapfile -t header_dirs < <(find "$repopath" -type f -name "*.h" -exec dirname {} \; 2>/dev/null | sort -u)
+  include_flags=""
+  for dir in "${header_dirs[@]}"; do
+    include_flags+=" -I\"$dir\""
+  done
+
   log_info "Searching for .c files in $reponame..."
   if ! mapfile -t cfiles < <(find "$repopath" -type f -name "*.c" 2>/dev/null); then
     log_error "Failed to find .c files in $reponame"
@@ -146,15 +154,23 @@ for repo in "${REPOS[@]}"; do
   fi
 
   for cfile in "${cfiles[@]}"; do
-    # TODO: add a check to see if the file is already in the output file
-    relname=$(basename "$cfile" .c)
-    objfile="$WORKDIR/${relname}.o"
+    # Generate a unique identifier for this file that includes repo name and relative path
+    rel_path=${cfile#$repopath/}
+    unique_id="${reponame}_${rel_path//\//_}"
+    objfile="$WORKDIR/${unique_id}.o"
 
     log_info "Compiling $cfile..."
-    if ! gcc -O0 -std=c17 -c -I"$repopath" "$cfile" -o "$objfile" 2>/dev/null; then
-      log_warning "Failed to compile $cfile, skipping..."
-      failed_files=$((failed_files+1))
-      continue
+    compile_cmd="gcc -O0 -std=c17 -w -c -I\"$repopath\" $include_flags \"$cfile\" -o \"$objfile\""
+    log_info "Running: $compile_cmd"
+    
+    if ! eval $compile_cmd 2>/dev/null; then
+      # Try with gnu99 if c17 fails
+      log_info "Retrying with gnu99 standard..."
+      if ! eval "${compile_cmd//-std=c17/-std=gnu99}" 2>/dev/null; then
+        log_warning "Failed to compile $cfile, skipping..."
+        failed_files=$((failed_files+1))
+        continue
+      fi
     fi
 
     log_info "Disassembling $objfile..."
