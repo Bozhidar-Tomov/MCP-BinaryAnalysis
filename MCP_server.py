@@ -84,37 +84,37 @@ def disassembly_samples_resource():
     - verbose: Whether to include verbose output (default: False)
     """
 )
-def compile_c(code: str, output_file: str = "output.o", options: str = "-O0 -std=c17", verbose: bool = False, ctx: Optional[Context] = None):
+async def compile_c(code: str, output_file: str = "output.o", options: str = "-O0 -std=c17", verbose: bool = False, ctx: Optional[Context] = None):
     """Compile C code using GCC with specified options and schema validation."""
     try:
         validated = CompileCInput(code=code, output_file=output_file, options=options, verbose=verbose)
     except ValidationError as ve:
-        if ctx: ctx.error(f"Input validation error: {ve}")
+        if ctx: await ctx.error(f"Input validation error: {ve}")
         return CompileCOutput(success=False, error=str(ve)).model_dump()
     except Exception as e:
-        if ctx: ctx.error(f"Unhandled error: {str(e)}")
+        if ctx: await ctx.error(f"Unhandled error: {str(e)}")
         return CompileCOutput(success=False, error=str(e)).model_dump()
 
     if ctx and validated.verbose:
-        ctx.info(f"Compiling C code with options: {validated.options}")
+        await ctx.info(f"Compiling C code with options: {validated.options}")
 
     # Detect if `code` is a path to an existing file and load its contents
     source_code = validated.code
     if os.path.exists(source_code):
         if ctx and validated.verbose:
-            ctx.info(f"Reading C source from file: {source_code}")
+            await ctx.info(f"Reading C source from file: {source_code}")
         try:
             with open(source_code, "r", encoding="utf-8") as f:
                 source_code = f.read()
         except Exception as e:
-            if ctx: ctx.error(f"Failed to read source file: {e}")
+            if ctx: await ctx.error(f"Failed to read source file: {e}")
             return CompileCOutput(success=False, error=str(e)).model_dump()
 
     opts = validated.options.split()
     try:
         cmd = ["gcc"] + opts + ["-xc", "-c", "-", "-o", validated.output_file]
         if ctx and validated.verbose:
-            ctx.info(f"Running command: {' '.join(cmd)}")
+            await ctx.info(f"Running command: {' '.join(cmd)}")
         gcc = subprocess.run(
             cmd, text=True,
             input=source_code,
@@ -124,11 +124,11 @@ def compile_c(code: str, output_file: str = "output.o", options: str = "-O0 -std
         
         if gcc.returncode:
             error_msg = gcc.stderr.strip()
-            if ctx: ctx.error(f"GCC compilation error: {error_msg}")
+            if ctx: await ctx.error(f"GCC compilation error: {error_msg}")
             return CompileCOutput(success=False, error=error_msg, returncode=gcc.returncode).model_dump()
         return CompileCOutput(success=True, message=f"Successfully compiled to {validated.output_file}", stdout=gcc.stdout.strip(), output_file=validated.output_file).model_dump()
     except Exception as e:
-        if ctx: ctx.error(f"Unhandled error: {str(e)}")
+        if ctx: await ctx.error(f"Unhandled error: {str(e)}")
         return CompileCOutput(success=False, error=str(e)).model_dump()
 
 @mcp.tool(
@@ -141,18 +141,18 @@ def compile_c(code: str, output_file: str = "output.o", options: str = "-O0 -std
     - options: Objdump options (default: -d -M intel -S)
     """
 )
-def disassemble_c(input: str, is_source_code: bool = True, options: str = "-d -M intel -S", ctx: Optional[Context] = None):
+async def disassemble_c(input: str, is_source_code: bool = True, options: str = "-d -M intel -S", ctx: Optional[Context] = None):
     """Disassemble C code or object file and return assembly, with schema validation and agentic logging."""
     try:
         validated = DisassembleCInput(input=input, is_source_code=is_source_code, options=options)
     except ValidationError as ve:
-        if ctx: ctx.error(f"Input validation error: {ve}")
+        if ctx: await ctx.error(f"Input validation error: {ve}")
         return DisassembleCOutput(success=False, error=str(ve), stage="validation").model_dump()
     object_file = None
     temp_file = None
     try:
         if validated.is_source_code:
-            if ctx: ctx.info("Compiling C code before disassembly...")
+            if ctx: await ctx.info("Compiling C code before disassembly...")
             # Allow `input` to be either raw source code or a path to a .c file
             code_src = validated.input
             if os.path.exists(code_src):
@@ -160,7 +160,7 @@ def disassemble_c(input: str, is_source_code: bool = True, options: str = "-d -M
                     with open(code_src, "r", encoding="utf-8") as f:
                         code_src = f.read()
                 except Exception as e:
-                    if ctx: ctx.error(f"Failed to read source file: {e}")
+                    if ctx: await ctx.error(f"Failed to read source file: {e}")
                     return DisassembleCOutput(success=False, error=str(e), stage="read_source").model_dump()
             temp_fd, temp_file = tempfile.mkstemp(suffix='.o')
             os.close(temp_fd)
@@ -168,13 +168,13 @@ def disassemble_c(input: str, is_source_code: bool = True, options: str = "-d -M
             compile_result = compile_c(code_src, output_file=temp_file, options="-O0 -std=c17", ctx=ctx)
             if not compile_result.get("success"):
                 error_msg = compile_result.get("error", "Unknown compilation error")
-                if ctx: ctx.error(f"GCC compilation error: {error_msg}")
+                if ctx: await ctx.error(f"GCC compilation error: {error_msg}")
                 return DisassembleCOutput(success=False, error=error_msg, stage="compilation").model_dump()
             object_file = temp_file
         else:
             object_file = validated.input
         opts = validated.options.split()
-        if ctx: ctx.info(f"Disassembling {object_file}...")
+        if ctx: await ctx.info(f"Disassembling {object_file}...")
         objdump = subprocess.run(
             ["objdump"] + opts + [object_file],
             stdout=subprocess.PIPE,
@@ -182,12 +182,12 @@ def disassemble_c(input: str, is_source_code: bool = True, options: str = "-d -M
         )
         if objdump.returncode:
             error_msg = objdump.stderr.decode().strip()
-            if ctx: ctx.error(f"Objdump error: {error_msg}")
+            if ctx: await ctx.error(f"Objdump error: {error_msg}")
             return DisassembleCOutput(success=False, error=error_msg, stage="disassembly").model_dump()
         assembly = objdump.stdout.decode()
         return DisassembleCOutput(success=True, assembly=assembly).model_dump()
     except Exception as e:
-        if ctx: ctx.error(f"Unhandled error: {str(e)}")
+        if ctx: await ctx.error(f"Unhandled error: {str(e)}")
         return DisassembleCOutput(success=False, error=str(e)).model_dump()
     finally:
         if temp_file and os.path.exists(temp_file):

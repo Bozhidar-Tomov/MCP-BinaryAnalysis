@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# json_fix.sh – Post-process a possibly malformed JSON array produced by other
+# json_fix.sh - Post-process a possibly malformed JSON array produced by other
 # scripts. It removes dangling commas, adds a missing closing bracket and
 # validates the result with jq.
 #
@@ -41,7 +41,7 @@ echo "Fixing '$INPUT' ..."
 sed -E '$ s/,[[:space:]]*$//' "$INPUT" > "$TMP"
 
 # 2.2 Remove a comma that appears immediately before the closing bracket
-sed -E -i 's/,([[:space:]]*])\/\1/' "$TMP"
+sed -E -i 's/,([[:space:]]*])/\1/' "$TMP"
 
 # ---------------------------------------------------------------------------
 # 3. Ensure the JSON array is closed
